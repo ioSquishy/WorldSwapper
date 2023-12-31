@@ -3,16 +3,17 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
-import java.util.HashMap;
+import java.util.TreeMap;
 import java.util.Scanner;
 
 public class App {
     private static final File savedWorldsFolder = new File("./saved-worlds");
     private static final File currentWorldKeyTxt = new File("./saved-worlds/currentWorldKey.txt");
     private static final File THEworldFolder = new File("./world");
-    private static final HashMap<String, File> savedWorlds = new HashMap<String, File>(); //all keys are stripped w/ original capitalization, value is relative path of its world folder
+    private static final TreeMap<String, File> savedWorlds = new TreeMap<String, File>(); //all keys are stripped w/ original capitalization, value is relative path of its world folder
     private static String currentWorldKey;
     private static File currentWorldFolder;
+    private static String selectedWorldKey;
     private static boolean createdNewWorld = false;
     public static void main(String[] args) {
         // create saved-worlds folder if it does not exist
@@ -32,14 +33,14 @@ public class App {
             }
         }
         //intialize system scanner
-        Scanner scan = new Scanner(System.in);
+        Scanner sysScan = new Scanner(System.in);
         // checks if program has been run before
         if (savedWorlds.isEmpty()) {
             System.out.println("Running first use setup.\nWhat would you like to save your current world as?");
-            String name = scan.nextLine().strip();
-            while (name.equalsIgnoreCase("new")) {
-                System.out.println("World name cannot be 'new'. Enter a different one.");
-                name = scan.nextLine().strip();
+            String name = sysScan.nextLine().strip();
+            while (name.isBlank()) {
+                System.out.println("World name cannot be empty. Enter a different one.");
+                name = sysScan.nextLine().strip();
             }
             File newWorld = new File(savedWorldsFolder.getPath()+"/"+name);
             newWorld.mkdir();
@@ -55,7 +56,7 @@ public class App {
             } catch (IOException e) {
                 e.printStackTrace();
                 System.out.println("Program could not read currentWorldKey.txt file. Exiting program.");
-                scan.close();
+                sysScan.close();
                 return;
             }
         }
@@ -63,62 +64,69 @@ public class App {
         currentWorldFolder = savedWorlds.get(currentWorldKey);
         if (currentWorldFolder == null) {
             System.out.println("Could not find current world folder. Check the currentWorldKey.txt file to make sure it has a corresponding folder in saved-worlds. Exiting program.");
-            scan.close();
+            sysScan.close();
             return;
         }
         // asks what world to load / create new one
-        System.out.println("Which world would you like to load?\n" + savedWorlds.keySet() + " or 'new'");
-        String selection = scan.nextLine().strip();
+        byte numWorlds = 0;
+        System.out.println("Which world would you like to load?");
+        System.out.println("0: Create New World");
+        for (String worldName : savedWorlds.keySet()) {
+            System.out.println((++numWorlds)+": " + worldName);
+        }
+        //last place
+        int selection = sysScan.nextInt();
         // choose world to load or create new world
-        while (!(savedWorlds.containsKey(selection) || selection.equalsIgnoreCase("new"))) {
-            System.out.println("That is not a valid option. Enter one of the listed choices above with exact spacing/capitalization.");
-            selection = scan.nextLine().strip();
+        while (!(selection <= numWorlds && selection >= 0)) {
+            System.out.println("That is not a valid option. Enter one of the listed choices above.");
+            selection = sysScan.nextInt();
         }
         // if creating new world
-        if (selection.equals("new")) {
+        if (selection == 0) {
             createdNewWorld = true;
             System.out.println("Enter new world name:");
-            selection = scan.nextLine().strip();
-            while (selection.isBlank() || savedWorlds.containsKey(selection) || selection.equalsIgnoreCase("new")) {
-                System.out.println("Name cannot be blank, already used, or 'new'. Enter a different one.");
-                selection = scan.nextLine().strip();
+            sysScan.nextLine(); // scan nextline because when you scan ints with a scanner before lines, it preloads an empty line or smth
+            String newWorldName = sysScan.nextLine().strip();
+            while (newWorldName.isBlank() || savedWorlds.containsKey(newWorldName)) {
+                System.out.println("Name cannot be blank or already used. Enter a different one.");
+                newWorldName = sysScan.nextLine().strip();
             }
-            File newWorldFolder = new File(savedWorldsFolder.getPath()+"/"+selection);
+            File newWorldFolder = new File(savedWorldsFolder.getPath()+"/"+newWorldName);
             newWorldFolder.mkdir();
-            savedWorlds.put(selection, newWorldFolder);
+            savedWorlds.put(newWorldName, newWorldFolder);
+            selectedWorldKey = newWorldName;
+        } else {
+            selectedWorldKey = (String) savedWorlds.keySet().toArray()[--selection];
         }
+        sysScan.close();
         // move current world to its folder
         try {
             Files.move(THEworldFolder.toPath(), currentWorldFolder.toPath().resolve("world"), StandardCopyOption.ATOMIC_MOVE);
         } catch (Exception e) {
             e.printStackTrace();
             System.out.println("Exiting program.");
-            scan.close();
             return;
         }
         // move selected world out
         if (!createdNewWorld) { // creating a new world dont need to move anything out
             try {
-                Files.move(savedWorlds.get(selection).toPath().resolve("world"), THEworldFolder.toPath(), StandardCopyOption.ATOMIC_MOVE);
+                Files.move(savedWorlds.get(selectedWorldKey).toPath().resolve("world"), THEworldFolder.toPath(), StandardCopyOption.ATOMIC_MOVE);
             } catch (Exception e) {
                 e.printStackTrace();
                 System.out.println("Exiting program.");
-                scan.close();
                 return;
             }
         }
         // save new current key in currentWorldKey.txt
         try {
             FileWriter fileWriter = new FileWriter(currentWorldKeyTxt);
-            fileWriter.write(selection);
+            fileWriter.write(selectedWorldKey);
             fileWriter.close();
         } catch (IOException e) {
             e.printStackTrace();
             System.out.println("Program could not write new key to 'currentWorldKey.txt'. Exiting program.");
-            scan.close();
             return;
         }
         //end program
-        scan.close();
     }
 }
