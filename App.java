@@ -21,8 +21,23 @@ public class App {
     private static boolean createdNewWorld = false;
     private static boolean useDefaultProps = false;
     public static void main(String[] args) {
-        // create saved-worlds folder if it does not exist
+        // create saved-worlds folder and default-server.properties file if it does not exist
         savedWorldsFolder.mkdir();
+        if (!defaultServerProps.exists()) {
+            try {
+                Files.copy(THEserverPropsFile.toPath(), defaultServerProps.toPath(), StandardCopyOption.COPY_ATTRIBUTES);
+                File newDefaultServerPropFile = new File("./saved-worlds/server.properties");
+                newDefaultServerPropFile.renameTo(defaultServerProps);
+                if (!defaultServerProps.exists()) {
+                    System.out.println("Program was not able to rename new default-server.properties file in 'saved-worlds' from 'server.properties' to 'default-server.properties'. Exiting program.");
+                    return;
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+                System.out.println("Unable to create default-server.properties file because current server.properties file does not exist. Create a world normally before using this program. Exiting program.");
+                return;
+            }
+        }
         // create txt file containing the current worlds key
         try {
             currentWorldKeyTxt.createNewFile();
