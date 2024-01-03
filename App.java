@@ -1,7 +1,6 @@
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.nio.file.CopyOption;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -134,8 +133,12 @@ public class App {
         // create copy of default-server.properties if needed
         if (useDefaultProps) {
             try {
-                Files.copy(defaultServerProps.toPath(), THEserverPropsFile.toPath(), StandardCopyOption.ATOMIC_MOVE);
-                // TODO change name of copied file to server.properties
+                Files.copy(defaultServerProps.toPath(), THEserverPropsFile.toPath(), StandardCopyOption.COPY_ATTRIBUTES);
+                File copiedServerPropFile = new File("./default-server.properties");
+                copiedServerPropFile.renameTo(THEserverPropsFile);
+                if (!THEserverPropsFile.exists()) { // check manually because renameTo() method returns false even when it works for some reason
+                    System.out.println("Program could not rename new server.properties file. Program will still change currentWorldKey.txt, but make sure to rename the 'default-server.properties' file (NOT IN THE saved-worlds FOLDER) to 'server.properties'.");
+                }
             } catch (IOException e) {
                 e.printStackTrace();
                 System.out.println("Program could not copy default-server.properties file. Exiting program.");
