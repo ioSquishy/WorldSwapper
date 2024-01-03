@@ -1,7 +1,10 @@
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.CopyOption;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.TreeMap;
 import java.util.Scanner;
@@ -10,11 +13,14 @@ public class App {
     private static final File savedWorldsFolder = new File("./saved-worlds");
     private static final File currentWorldKeyTxt = new File("./saved-worlds/currentWorldKey.txt");
     private static final File THEworldFolder = new File("./world");
+    private static final File defaultServerProps = new File("./saved-worlds/default-server.properties");
+    private static final File THEserverPropsFile = new File("./server.properties");
     private static final TreeMap<String, File> savedWorlds = new TreeMap<String, File>(); //all keys are stripped w/ original capitalization, value is relative path of its world folder
     private static String currentWorldKey;
     private static File currentWorldFolder;
     private static String selectedWorldKey;
     private static boolean createdNewWorld = false;
+    private static boolean useDefaultProps = false;
     public static void main(String[] args) {
         // create saved-worlds folder if it does not exist
         savedWorldsFolder.mkdir();
@@ -84,6 +90,7 @@ public class App {
         // if creating new world
         if (selection == 0) {
             createdNewWorld = true;
+            useDefaultProps = true;
             System.out.println("Enter new world name:");
             sysScan.nextLine(); // scan nextline because when you scan ints with a scanner before lines, it preloads an empty line or smth
             String newWorldName = sysScan.nextLine().strip();
@@ -102,6 +109,7 @@ public class App {
         // move current world to its folder
         try {
             Files.move(THEworldFolder.toPath(), currentWorldFolder.toPath().resolve("world"), StandardCopyOption.ATOMIC_MOVE);
+            Files.move(THEserverPropsFile.toPath(), currentWorldFolder.toPath().resolve("server.properties"), StandardCopyOption.ATOMIC_MOVE);
         } catch (Exception e) {
             e.printStackTrace();
             System.out.println("Exiting program.");
@@ -111,10 +119,26 @@ public class App {
         if (!createdNewWorld) { // creating a new world dont need to move anything out
             try {
                 Files.move(savedWorlds.get(selectedWorldKey).toPath().resolve("world"), THEworldFolder.toPath(), StandardCopyOption.ATOMIC_MOVE);
+                Path selectedWorldProps = savedWorlds.get(selectedWorldKey).toPath().resolve("server.properties");
+                if (Files.exists(selectedWorldProps, LinkOption.NOFOLLOW_LINKS)) {
+                    Files.move(selectedWorldProps, THEserverPropsFile.toPath(), StandardCopyOption.ATOMIC_MOVE);
+                } else { // if server props file was deleted, enable boolea to copy over default-server.properties
+                    useDefaultProps = true;
+                }
             } catch (Exception e) {
                 e.printStackTrace();
                 System.out.println("Exiting program.");
                 return;
+            }
+        }
+        // create copy of default-server.properties if needed
+        if (useDefaultProps) {
+            try {
+                Files.copy(defaultServerProps.toPath(), THEserverPropsFile.toPath(), StandardCopyOption.ATOMIC_MOVE);
+                // TODO change name of copied file to server.properties
+            } catch (IOException e) {
+                e.printStackTrace();
+                System.out.println("Program could not copy default-server.properties file. Exiting program.");
             }
         }
         // save new current key in currentWorldKey.txt
