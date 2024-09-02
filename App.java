@@ -17,6 +17,7 @@ public class App {
     private static final File defaultServerProps = new File("./saved-worlds/default-server.properties");
     private static final File THEserverPropsFile = new File("./server.properties");
     private static final File THEserverIconFile = new File("./server-icon.png");
+    private static final File THEwhitelistFile = new File("./whitelist.json");
     private static final TreeMap<String, File> savedWorlds = new TreeMap<String, File>(); //all keys are stripped w/ original capitalization, value is relative path of its world folder
     private static String currentWorldKey;
     private static File currentWorldFolder;
@@ -126,10 +127,15 @@ public class App {
                 } else { // if server props file was deleted, enable boolean to copy over default-server.properties
                     useDefaultProps = true;
                 }
-                // if server icon exists, move that to
+                // if server icon exists, move that too
                 File serverIcon = savedWorld.toPath().resolve("server-icon.png").toFile();
                 if (serverIcon.exists()) {
                     Files.move(serverIcon.toPath(), THEserverIconFile.toPath(), StandardCopyOption.ATOMIC_MOVE);
+                }
+                // if whitelist file exists, move that too
+                File whitelistFile = savedWorld.toPath().resolve("whitelist.json").toFile();
+                if (whitelistFile.exists()) {
+                    Files.move(whitelistFile.toPath(), THEwhitelistFile.toPath(), StandardCopyOption.ATOMIC_MOVE);
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -236,9 +242,13 @@ public class App {
             Files.move(THEworldFolder.toPath(), currentWorldFolder.toPath().resolve("world"), StandardCopyOption.ATOMIC_MOVE);
             // move server properties
             Files.move(THEserverPropsFile.toPath(), currentWorldFolder.toPath().resolve("server.properties"), StandardCopyOption.ATOMIC_MOVE);
-            // if server icon exists move it back to its folder
+            // if server icon exists move it
             if (THEserverIconFile.exists()) {
                 Files.move(THEserverIconFile.toPath(), currentWorldFolder.toPath().resolve("server-icon.png"), StandardCopyOption.ATOMIC_MOVE);
+            }
+            // if whitelist file exists move it
+            if (THEwhitelistFile.exists()) {
+                Files.move(THEwhitelistFile.toPath(), currentWorldFolder.toPath().resolve("whitelist.json"), StandardCopyOption.ATOMIC_MOVE);
             }
             return true;
         } catch (Exception e) {
