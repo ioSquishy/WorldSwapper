@@ -6,6 +6,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.TreeMap;
+import java.util.InputMismatchException;
 import java.util.Scanner;
 
 public class App {
@@ -14,27 +15,33 @@ public class App {
     private static final File THEworldFolder = new File("./world");
     private static final File defaultServerProps = new File("./saved-worlds/default-server.properties");
     private static final File THEserverPropsFile = new File("./server.properties");
+    private static final File THEserverIconFile = new File("./server-icon.png");
     private static final TreeMap<String, File> savedWorlds = new TreeMap<String, File>(); //all keys are stripped w/ original capitalization, value is relative path of its world folder
     private static String currentWorldKey;
     private static File currentWorldFolder;
     private static String selectedWorldKey;
     private static boolean createdNewWorld = false;
     private static boolean useDefaultProps = false;
+    
     public static void main(String[] args) {
         // create saved-worlds folder and default-server.properties file if it does not exist
         savedWorldsFolder.mkdir();
         if (!defaultServerProps.exists()) {
             try {
                 Files.copy(THEserverPropsFile.toPath(), defaultServerProps.toPath(), StandardCopyOption.COPY_ATTRIBUTES);
+            } catch (IOException e) {
+                e.printStackTrace();
+                System.out.println("Unable to create default-server.properties file because current server.properties file does not exist. Create a world normally before using this program. Exiting program.");
+                return;
+            }
+            try {
                 File newDefaultServerPropFile = new File("./saved-worlds/server.properties");
                 newDefaultServerPropFile.renameTo(defaultServerProps);
                 if (!defaultServerProps.exists()) {
                     System.out.println("Program was not able to rename new default-server.properties file in 'saved-worlds' from 'server.properties' to 'default-server.properties'. Exiting program.");
-                    return;
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
-                System.out.println("Unable to create default-server.properties file because current server.properties file does not exist. Create a world normally before using this program. Exiting program.");
+            } catch (Exception e) {
+                System.out.println("Program was not able to rename new default-server.properties file in 'saved-worlds' from 'server.properties' to 'default-server.properties'. Exiting program.");
                 return;
             }
         }
@@ -95,11 +102,20 @@ public class App {
             System.out.println((++numWorlds)+": " + worldName);
         }
         //last place
-        int selection = sysScan.nextInt();
+        int selection = -1;
+        try {
+            selection = sysScan.nextInt();
+        } catch (InputMismatchException e) {
+            System.out.println("Enter just the number of your selection. Not the name.");
+        }
         // choose world to load or create new world
         while (!(selection <= numWorlds && selection >= 0)) {
             System.out.println("That is not a valid option. Enter one of the listed choices above.");
-            selection = sysScan.nextInt();
+            try {
+                selection = sysScan.nextInt();
+            } catch (InputMismatchException e) {
+                System.out.println("Enter just the number of your selection. Not the name.");
+            }
         }
         // if creating new world
         if (selection == 0) {
@@ -114,6 +130,15 @@ public class App {
             }
             File newWorldFolder = new File(savedWorldsFolder.getPath()+"/"+newWorldName);
             newWorldFolder.mkdir();
+            File keepFile = new File(newWorldFolder.getPath()+"/.keep");
+            try {
+                keepFile.createNewFile();
+            } catch (IOException e) {
+                e.printStackTrace();
+                System.out.println("Program could not create .keep file in new folder. Exiting program.");
+                sysScan.close();
+                return;
+            }
             savedWorlds.put(newWorldName, newWorldFolder);
             selectedWorldKey = newWorldName;
         } else {
@@ -122,8 +147,14 @@ public class App {
         sysScan.close();
         // move current world to its folder
         try {
+            // move world folder
             Files.move(THEworldFolder.toPath(), currentWorldFolder.toPath().resolve("world"), StandardCopyOption.ATOMIC_MOVE);
+            // move server properties
             Files.move(THEserverPropsFile.toPath(), currentWorldFolder.toPath().resolve("server.properties"), StandardCopyOption.ATOMIC_MOVE);
+            // if server icon exists move it back to its folder
+            if (THEserverIconFile.exists()) {
+                Files.move(THEserverIconFile.toPath(), currentWorldFolder.toPath().resolve("server-icon.png"), StandardCopyOption.ATOMIC_MOVE);
+            }
         } catch (Exception e) {
             e.printStackTrace();
             System.out.println("Exiting program.");
@@ -132,12 +163,20 @@ public class App {
         // move selected world out
         if (!createdNewWorld) { // creating a new world dont need to move anything out
             try {
-                Files.move(savedWorlds.get(selectedWorldKey).toPath().resolve("world"), THEworldFolder.toPath(), StandardCopyOption.ATOMIC_MOVE);
-                Path selectedWorldProps = savedWorlds.get(selectedWorldKey).toPath().resolve("server.properties");
+                File savedWorld = savedWorlds.get(selectedWorldKey);
+                // move world folder
+                Files.move(savedWorld.toPath().resolve("world"), THEworldFolder.toPath(), StandardCopyOption.ATOMIC_MOVE);
+                // move server properties file
+                Path selectedWorldProps = savedWorld.toPath().resolve("server.properties");
                 if (Files.exists(selectedWorldProps, LinkOption.NOFOLLOW_LINKS)) {
                     Files.move(selectedWorldProps, THEserverPropsFile.toPath(), StandardCopyOption.ATOMIC_MOVE);
-                } else { // if server props file was deleted, enable boolea to copy over default-server.properties
+                } else { // if server props file was deleted, enable boolean to copy over default-server.properties
                     useDefaultProps = true;
+                }
+                // if server icon exists, move that to
+                File serverIcon = savedWorld.toPath().resolve("server-icon.png").toFile();
+                if (serverIcon.exists()) {
+                    Files.move(serverIcon.toPath(), THEserverIconFile.toPath(), StandardCopyOption.ATOMIC_MOVE);
                 }
             } catch (Exception e) {
                 e.printStackTrace();
