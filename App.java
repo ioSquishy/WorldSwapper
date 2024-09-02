@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.TreeMap;
 import java.util.InputMismatchException;
+import java.util.NoSuchElementException;
 import java.util.Scanner;
 
 public class App {
@@ -22,45 +23,25 @@ public class App {
     private static String selectedWorldKey;
     private static boolean createdNewWorld = false;
     private static boolean useDefaultProps = false;
+    private static Scanner sysScan;
     
     public static void main(String[] args) {
-        // create saved-worlds folder and default-server.properties file if it does not exist
-        savedWorldsFolder.mkdir();
-        if (!defaultServerProps.exists()) {
-            try {
-                Files.copy(THEserverPropsFile.toPath(), defaultServerProps.toPath(), StandardCopyOption.COPY_ATTRIBUTES);
-            } catch (IOException e) {
-                e.printStackTrace();
-                System.out.println("Unable to create default-server.properties file because current server.properties file does not exist. Create a world normally before using this program. Exiting program.");
-                return;
-            }
-            try {
-                File newDefaultServerPropFile = new File("./saved-worlds/server.properties");
-                newDefaultServerPropFile.renameTo(defaultServerProps);
-                if (!defaultServerProps.exists()) {
-                    System.out.println("Program was not able to rename new default-server.properties file in 'saved-worlds' from 'server.properties' to 'default-server.properties'. Exiting program.");
-                }
-            } catch (Exception e) {
-                System.out.println("Program was not able to rename new default-server.properties file in 'saved-worlds' from 'server.properties' to 'default-server.properties'. Exiting program.");
-                return;
-            }
-        }
-        // create txt file containing the current worlds key
-        try {
-            currentWorldKeyTxt.createNewFile();
-        } catch (IOException e) {
-            e.printStackTrace();
-            System.out.println("Could not create currentWorldKey.txt file. Exiting program.");
+        if (args.length > 0 && args[0].equals("save")) {
+            if (!initFiles()) return;
+            createSavedWorldsHashMap();
+            if (savedWorlds.isEmpty()) return;
+            if (!getCurrentWorldKey()) return;
+            if (!getCurrentWorldFolder()) return;
+            if (!moveWorldIntoSaved()) return;
+            selectedWorldKey = "";
+            storeSelectedWorldKey();
             return;
         }
+        if (!initFiles()) return;
         // makes hashmap of all worlds found in "saved-worlds" folder
-        for (File savedWorld : savedWorldsFolder.listFiles()) {
-            if (savedWorld.isDirectory()) {
-                savedWorlds.put(savedWorld.getName(), savedWorld);
-            }
-        }
+        createSavedWorldsHashMap();
         //intialize system scanner
-        Scanner sysScan = new Scanner(System.in);
+        sysScan = new Scanner(System.in);
         // checks if program has been run before
         if (savedWorlds.isEmpty()) {
             System.out.println("Running first use setup.\nWhat would you like to save your current world as?");
@@ -75,25 +56,10 @@ public class App {
             currentWorldKey = name;
             System.out.println("Current world name set to: " + name);
         } else {
-            // create scanner and store the key
-            try {
-                Scanner keyScan = new Scanner(currentWorldKeyTxt);
-                currentWorldKey = keyScan.nextLine();
-                keyScan.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-                System.out.println("Program could not read currentWorldKey.txt file. Exiting program.");
-                sysScan.close();
-                return;
-            }
+            if (!getCurrentWorldKey()) return;
         }
         // store current world folder
-        currentWorldFolder = savedWorlds.get(currentWorldKey);
-        if (currentWorldFolder == null) {
-            System.out.println("Could not find current world folder. Check the currentWorldKey.txt file to make sure it has a corresponding folder in saved-worlds. Exiting program.");
-            sysScan.close();
-            return;
-        }
+        if (!getCurrentWorldFolder()) return;
         // asks what world to load / create new one
         byte numWorlds = 0;
         System.out.println("Which world would you like to load?");
@@ -146,20 +112,7 @@ public class App {
         }
         sysScan.close();
         // move current world to its folder
-        try {
-            // move world folder
-            Files.move(THEworldFolder.toPath(), currentWorldFolder.toPath().resolve("world"), StandardCopyOption.ATOMIC_MOVE);
-            // move server properties
-            Files.move(THEserverPropsFile.toPath(), currentWorldFolder.toPath().resolve("server.properties"), StandardCopyOption.ATOMIC_MOVE);
-            // if server icon exists move it back to its folder
-            if (THEserverIconFile.exists()) {
-                Files.move(THEserverIconFile.toPath(), currentWorldFolder.toPath().resolve("server-icon.png"), StandardCopyOption.ATOMIC_MOVE);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            System.out.println("Exiting program.");
-            return;
-        }
+        if (!moveWorldIntoSaved()) return;
         // move selected world out
         if (!createdNewWorld) { // creating a new world dont need to move anything out
             try {
@@ -199,6 +152,103 @@ public class App {
             }
         }
         // save new current key in currentWorldKey.txt
+        if (!storeSelectedWorldKey()) return;
+        //end program
+    }
+
+    private static boolean initFiles() {
+        // create saved-worlds folder and default-server.properties file if it does not exist
+        savedWorldsFolder.mkdir();
+        if (!defaultServerProps.exists()) {
+            try {
+                Files.copy(THEserverPropsFile.toPath(), defaultServerProps.toPath(), StandardCopyOption.COPY_ATTRIBUTES);
+            } catch (IOException e) {
+                e.printStackTrace();
+                System.out.println("Unable to create default-server.properties file because current server.properties file does not exist. Create a world normally before using this program. Exiting program.");
+                return false;
+            }
+            try {
+                File newDefaultServerPropFile = new File("./saved-worlds/server.properties");
+                newDefaultServerPropFile.renameTo(defaultServerProps);
+                if (!defaultServerProps.exists()) {
+                    System.out.println("Program was not able to rename new default-server.properties file in 'saved-worlds' from 'server.properties' to 'default-server.properties'. Exiting program.");
+                }
+            } catch (Exception e) {
+                System.out.println("Program was not able to rename new default-server.properties file in 'saved-worlds' from 'server.properties' to 'default-server.properties'. Exiting program.");
+                return false;
+            }
+        }
+        // create txt file containing the current worlds key
+        try {
+            currentWorldKeyTxt.createNewFile();
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.out.println("Could not create currentWorldKey.txt file. Exiting program.");
+            return false;
+        }
+        return true;
+    }
+
+    private static void createSavedWorldsHashMap() {
+        for (File savedWorld : savedWorldsFolder.listFiles()) {
+            if (savedWorld.isDirectory()) {
+                savedWorlds.put(savedWorld.getName(), savedWorld);
+            }
+        }
+    }
+
+    private static boolean getCurrentWorldKey() {
+        // create scanner and store the key
+        try {
+            Scanner keyScan = new Scanner(currentWorldKeyTxt);
+            currentWorldKey = keyScan.nextLine();
+            keyScan.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.out.println("Program could not read currentWorldKey.txt file. Exiting program.");
+            sysScan.close();
+            return false;
+        } catch (NoSuchElementException e) {
+            currentWorldKey = "";
+        }
+        return true;
+    }
+
+    private static boolean getCurrentWorldFolder() {
+        if (currentWorldKey.isEmpty()) {
+            return true;
+        }
+        currentWorldFolder = savedWorlds.get(currentWorldKey);
+        if (currentWorldFolder == null) {
+            System.out.println("Could not find current world folder. Check the currentWorldKey.txt file to make sure it has a corresponding folder in saved-worlds. Exiting program.");
+            sysScan.close();
+            return false;
+        }
+        return true;
+    }
+
+    private static boolean moveWorldIntoSaved() {
+        if (currentWorldKey.isBlank()) {
+            return true;
+        }
+        try {
+            // move world folder
+            Files.move(THEworldFolder.toPath(), currentWorldFolder.toPath().resolve("world"), StandardCopyOption.ATOMIC_MOVE);
+            // move server properties
+            Files.move(THEserverPropsFile.toPath(), currentWorldFolder.toPath().resolve("server.properties"), StandardCopyOption.ATOMIC_MOVE);
+            // if server icon exists move it back to its folder
+            if (THEserverIconFile.exists()) {
+                Files.move(THEserverIconFile.toPath(), currentWorldFolder.toPath().resolve("server-icon.png"), StandardCopyOption.ATOMIC_MOVE);
+            }
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.out.println("Exiting program.");
+            return false;
+        }
+    }
+
+    private static boolean storeSelectedWorldKey() {
         try {
             FileWriter fileWriter = new FileWriter(currentWorldKeyTxt);
             fileWriter.write(selectedWorldKey);
@@ -206,8 +256,8 @@ public class App {
         } catch (IOException e) {
             e.printStackTrace();
             System.out.println("Program could not write new key to 'currentWorldKey.txt'. Exiting program.");
-            return;
+            return false;
         }
-        //end program
+        return true;
     }
 }
